@@ -8,10 +8,8 @@ import java.util.stream.Collectors;
 import akka.actor.typed.ActorRef;
 import akka.actor.typed.Behavior;
 import akka.actor.typed.javadsl.*;
-import pods.cabs.Cab.RideStarted;
 
 public class FulfillRide extends AbstractBehavior<FulfillRide.Command> {
-    final HashMap<String, CabData> cabDataMap;
     private List<CabData> cabList;
 
     private int nextRideId;
@@ -106,22 +104,16 @@ public class FulfillRide extends AbstractBehavior<FulfillRide.Command> {
     /*
      * INITIALIZATION
      */
-    public static Behavior<Command> create(
-        HashMap<String, CabData> cabDataMap
-    ) {
+    public static Behavior<Command> create() {
         return Behaviors.setup(
 	        context -> {
-                return new FulfillRide(context, cabDataMap);
+                return new FulfillRide(context);
 	        }
         );
     }
 
-    private FulfillRide(
-        ActorContext<Command> context, 
-        HashMap<String, CabData> cabDataMap
-    ) {
+    private FulfillRide(ActorContext<Command> context) {
         super(context);
-        this.cabDataMap = cabDataMap;
         this.curState = FFState.REQ_CABS;
         this.requestCount = 0;
         this.nextCabIndex = 0;
@@ -149,26 +141,6 @@ public class FulfillRide extends AbstractBehavior<FulfillRide.Command> {
         this.origMessage = message;
         // Will try to find an available cab and start a ride
         
-        // - first, make a list of cabs and sort them by distance from source
-        class CabComparer implements Comparator<CabData>{
-            int sourceLoc;
-            public CabComparer(int sourceLoc) {
-                this.sourceLoc = sourceLoc;
-            }
-
-            // Will use this custom comparator for sorting
-            public int compare(CabData a, CabData b) {
-                return Math.abs(a.location - sourceLoc) - Math.abs(b.location - sourceLoc);
-            }
-            
-        }
-
-        // create cab list
-        this.cabList = cabDataMap.values()
-                                 .stream()
-                                 .sorted(new CabComparer(message.sourceLoc))
-                                 .collect(Collectors.toList());
-
         // - get a new rideId
         this.nextRideId = Globals.getNextRideId();
 
@@ -195,31 +167,27 @@ public class FulfillRide extends AbstractBehavior<FulfillRide.Command> {
             // process this message only if currently waiting for cab response
 
             if(message.accepted) {
-                getContext().getLog().info("-- Cab " + requestedCabId + " accepted");
-                // If the request was accepted, move on to deducting from wallet
-                // get customer id and send a deduct request for his wallet
-                String custId = this.origMessage.custId;
-                int cabLoc = cabDataMap.get(requestedCabId).location;
-                int fare = 10*(Math.abs(cabLoc - origMessage.sourceLoc) + Math.abs(origMessage.sourceLoc - origMessage.destinationLoc));
-                this.fareCalculated = fare;
-
-                ActorRef<Wallet.ResponseBalance> walletResponseAdapter = getContext().messageAdapter(
-                    Wallet.ResponseBalance.class, WrappedResponseBalance::new
-                );
-
-                Globals.wallets.get(custId).tell(new Wallet.DeductBalance(
-                    fare,
-                    walletResponseAdapter
+                // Send ride started, and send ride response to ride service
+                Globals.cabs.get(cabDataMap.get(requestedCabId).id).tell(new Cab.RideStarted(
+                    this.nextRideId,
+                    getContext().getSelf()
                 ));
 
-                // change state
-                this.curState = FFState.DEDUCT_AMOUNT;
+                origMessage.replyTo.tell(new RideService.RideResponse(
+                    nextRideId,
+                    requestedCabId,
+                    fareCalculated,
+                    getContext().getSelf(),
+                    origMessage.probe
+                ));
+
+                // don't wait for ride end, stop now
+                return Behaviors.stopped();
             }
             else {
-                getContext().getLog().info("-- Cab " + requestedCabId + " rejected...");
                 // cab did not accept; try and request another cab
                 this.curState = FFState.REQ_CABS;
-                if(requestCount < 3) requestNextCab();
+                requestNextCab();
 
                 // if no available cab was found, terminate
                 if(this.curState != FFState.WAIT_FOR_CAB) {
@@ -239,37 +207,7 @@ public class FulfillRide extends AbstractBehavior<FulfillRide.Command> {
     }
 
     private Behavior<Command> onWrappedResponseBalance(WrappedResponseBalance message) {
-        if(message.response.balance < 0) {
-            // deduction failed; cancel ride and terminate.
-            Globals.cabs.get(cabDataMap.get(requestedCabId).id).tell(new Cab.RideCancelled(
-                this.nextRideId,
-                getContext().getSelf()
-            ));
-            origMessage.replyTo.tell(new RideService.RideResponse(
-                -1,
-                "-1",
-                0,
-                getContext().getSelf(),
-                origMessage.probe
-            ));
-            return Behaviors.stopped();
-        }
-
         // deduction was successul; start ride, tell parent and wait for rideEnded from cab
-        Globals.cabs.get(cabDataMap.get(requestedCabId).id).tell(new Cab.RideStarted(
-            this.nextRideId,
-            getContext().getSelf()
-        ));
-
-        origMessage.replyTo.tell(new RideService.RideResponse(
-            nextRideId,
-            requestedCabId,
-            fareCalculated,
-            getContext().getSelf(),
-            origMessage.probe
-        ));
-
-        this.curState = FFState.WAIT_FOR_RIDE_END;
         return this;
     }
 

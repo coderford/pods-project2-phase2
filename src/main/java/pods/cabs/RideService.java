@@ -7,7 +7,6 @@ import java.util.HashMap;
 
 public class RideService extends AbstractBehavior<RideService.Command> {
     // CabData HashMap
-    private HashMap<String, CabData> cabDataMap;
     int fulfillSpawnCount = 0;
 
     public interface Command {
@@ -108,13 +107,12 @@ public class RideService extends AbstractBehavior<RideService.Command> {
      */
     public static Behavior<Command> create(HashMap<String, CabData> cabDataMap) {
         return Behaviors.setup(context -> {
-            return new RideService(context, cabDataMap);
+            return new RideService(context);
         });
     }
 
-    private RideService(ActorContext<Command> context, HashMap<String, CabData> CabDataMap) {
+    private RideService(ActorContext<Command> context) {
         super(context);
-        this.cabDataMap = CabDataMap;
         this.fulfillSpawnCount = 0;
     }
 
@@ -142,7 +140,7 @@ public class RideService extends AbstractBehavior<RideService.Command> {
         // Spawn a new FulfillRide actor, with a unique name
         fulfillSpawnCount++;
         String name = this.toString() + "-ff" + fulfillSpawnCount;
-        ActorRef<FulfillRide.Command> fulfillActor = getContext().spawn(FulfillRide.create(cabDataMap), name);
+        ActorRef<FulfillRide.Command> fulfillActor = getContext().spawn(FulfillRide.create(), name);
 
         // Forward request to spawned FulfillRide
         fulfillActor.tell(new FulfillRide.FulfillRideRequest(
@@ -157,114 +155,28 @@ public class RideService extends AbstractBehavior<RideService.Command> {
     }
 
     private Behavior<Command> onCabSignsIn(CabSignsIn message) {
-        // Update cached cab state
-        cabDataMap.get(message.cabId).state = CabState.AVAILABLE;
-
-        // Send update messages to all other ride services
-        int timestamp = Globals.getUpdateTimestamp();
-        for(int i = 0; i < Globals.rideService.size(); i++) {
-            if(!Globals.rideService.get(i).equals(getContext().getSelf()))
-            Globals.rideService.get(i).tell(new RideService.CabUpdate(
-                message.cabId, 
-                this.cabDataMap.get(message.cabId), 
-                timestamp
-            ));
-            else {
-                getContext().getLog().info("Not sending sign-in update to ride service " + i);
-            }
-        }
-
         return this;
     }
 
     private Behavior<Command> onCabSignsOut(CabSignsOut message) {
-        // Update cached state
-        cabDataMap.get(message.cabId).state = CabState.SIGNED_OUT;
-
-        // Send update messages to all other ride services
-        int timestamp = Globals.getUpdateTimestamp();
-        for(int i = 0; i < Globals.rideService.size(); i++) {
-            if(!Globals.rideService.get(i).equals(getContext().getSelf()))
-            Globals.rideService.get(i).tell(new RideService.CabUpdate(
-                message.cabId, 
-                this.cabDataMap.get(message.cabId), 
-                timestamp
-            ));
-            else {
-                getContext().getLog().info("Not sending sign-in update to ride service " + i);
-            }
-        }
-
         return this;
     }
 
     private Behavior<Command> onRideResponse(RideResponse message) {
-        // Ride request was successful, update cache and send update messages to other ride services
-        if(!message.cabId.equals("-1")) {
-            cabDataMap.get(message.cabId).rideId = message.rideId;
-            cabDataMap.get(message.cabId).state = CabState.GIVING_RIDE;
-            
-            int timestamp = Globals.getUpdateTimestamp();
-            for(int i = 0; i < Globals.rideService.size(); i++) {
-                if(!Globals.rideService.get(i).equals(getContext().getSelf()))
-                Globals.rideService.get(i).tell(new RideService.CabUpdate(
-                    message.cabId, 
-                    this.cabDataMap.get(message.cabId), 
-                    timestamp
-                ));
-                else {
-                    getContext().getLog().info("Not sending update to ride service " + i);
-                }
-            }
-        }
-
         // Send message to testProbe about the ride response
         message.probe.tell(message);
         return this;
     }
 
     private Behavior<Command> onRideEnded(RideEnded message) {
-        // Update cache
-        cabDataMap.get(message.cabId).state = CabState.AVAILABLE;
-        cabDataMap.get(message.cabId).rideId = -1;
-        cabDataMap.get(message.cabId).location = message.newCabLocation;
-
-        // Send update messages to other ride service actors
-        int timestamp = Globals.getUpdateTimestamp();
-        for(int i = 0; i < Globals.rideService.size(); i++) {
-            if(!Globals.rideService.get(i).equals(getContext().getSelf()))
-            Globals.rideService.get(i).tell(new RideService.CabUpdate(
-                message.cabId, 
-                this.cabDataMap.get(message.cabId), 
-                timestamp
-            ));
-            else {
-                getContext().getLog().info("Not sending update to ride service " + i);
-            }
-        }
         return this;
     }
 
     private Behavior<Command> onCabUpdate(CabUpdate message) {
-        // Update only if timestamp of update is more recent then currently stored timestamp
-        if(message.timestamp > cabDataMap.get(message.cabId).timestamp)  {
-            cabDataMap.put(message.cabId, message.cabData);
-            cabDataMap.get(message.cabId).timestamp = message.timestamp;
-        }
         return this;
     }
 
     private Behavior<Command> onReset(Reset message) {
-
-        for (String i : cabDataMap.keySet()) {
-            cabDataMap.get(i).numRides = 0;
-            cabDataMap.get(i).state = CabState.SIGNED_OUT;
-            cabDataMap.get(i).rideId = -1;
-            cabDataMap.get(i).location = 0;
-            cabDataMap.get(i).sourceLoc = -1;
-            cabDataMap.get(i).destinationLoc = -1;
-        }
-
         return this;
     }
 
