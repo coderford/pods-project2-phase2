@@ -61,13 +61,6 @@ public class Main {
                 Globals.cabs.put(id, cab);
             }
 
-            // Create Wallet actors
-            for (String id : walletIds) {
-                String name = "wallet-actor-" + id;
-                wallet = context.spawn(Wallet.create(id, initBalance), name);
-                Globals.wallets.put(id, wallet);
-            }
-
             // Create 10 RideService actors
             for (int i = 0; i < 10; i++) {
                 String name = "ride-actor-" + Integer.toString(i);

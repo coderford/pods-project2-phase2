@@ -7,7 +7,6 @@ import akka.actor.typed.ActorRef;
 
 public class Globals {
     public static final HashMap<String, ActorRef<Cab.Command>> cabs = new HashMap<>();
-    public static final HashMap<String, ActorRef<Wallet.Command>> wallets = new HashMap<>();
     public static final ArrayList<ActorRef<RideService.Command>> rideService = new ArrayList<>();
 
     public static int initBalance=0;
