@@ -105,7 +105,7 @@ public class RideService extends AbstractBehavior<RideService.Command> {
     /*
      * INITIALIZATION
      */
-    public static Behavior<Command> create(HashMap<String, CabData> cabDataMap) {
+    public static Behavior<Command> create() {
         return Behaviors.setup(context -> {
             return new RideService(context);
         });

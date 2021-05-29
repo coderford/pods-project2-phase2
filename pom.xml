@@ -22,6 +22,16 @@
             <version>1.2.3</version>
         </dependency>
         <dependency>
+          <groupId>com.typesafe.akka</groupId>
+          <artifactId>akka-cluster-typed_2.13</artifactId>
+          <version>${akka.version}</version>
+        </dependency>
+        <dependency>
+          <groupId>com.typesafe.akka</groupId>
+          <artifactId>akka-serialization-jackson_2.13</artifactId>
+          <version>${akka.version}</version>
+        </dependency>
+        <dependency>
             <groupId>com.typesafe.akka</groupId>
             <artifactId>akka-actor-testkit-typed_2.13</artifactId>
             <version>${akka.version}</version>

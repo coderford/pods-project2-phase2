@@ -15,13 +15,12 @@ public class Main {
 
     }
 
-    public static Behavior<Void> create(ActorRef<Main.Started> testProbe) {
+    public static Behavior<Void> create(int nextRideService) {
         return Behaviors.setup(context -> {
             /*
              * Initialize CabData HashMap
              */
             ActorRef<Cab.Command> cab;
-            ActorRef<Wallet.Command> wallet;
             HashMap<String, CabData> cabDataMap = new HashMap<>();
 
             int initBalance = 0;
@@ -52,24 +51,14 @@ public class Main {
                 System.out.println("ERROR: Could not read input file!");
             }
             
-            // Create Cab actors
-            for (String id : cabIds) {
-                cabDataMap.put(id, new CabData(id));
-
-                String name = "cab-actor-" + id;
-                cab = context.spawn(Cab.create(id), name);
-                Globals.cabs.put(id, cab);
-            }
-
-            // Create 10 RideService actors
-            for (int i = 0; i < 10; i++) {
+            // Create 3 RideService actors
+            for (int i = nextRideService; i < nextRideService + 3; i++) {
                 String name = "ride-actor-" + Integer.toString(i);
-                ActorRef<RideService.Command> tmpRide = context.spawn(RideService.create(cabDataMap), name);
+                ActorRef<RideService.Command> tmpRide = context.spawn(RideService.create(), name);
                 Globals.rideService.add(tmpRide);
             }
 
-            // Send a message to testprobe
-            testProbe.tell(new Started());
+            // Will accept no more messages
             return Behaviors.empty();
         });
     }
