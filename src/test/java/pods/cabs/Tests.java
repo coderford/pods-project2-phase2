@@ -81,6 +81,28 @@ public class Tests {
         System.out.println("---- TEST 1 PASSED \n \n \n \n \n");
     }
 
+    @Test
+    public void test1_2() {
+        init();
+
+        EntityRef<Cab.Command> cab = sharding.entityRefFor(Cab.TypeKey, "101");
+        cab.tell(new Cab.SignIn(10));
+        System.out.println("CAB 101 SIGNED IN");
+
+        Random rand = new Random();
+        String rsid = "ride-actor-" + rand.nextInt(12) + 1;
+        EntityRef<Command> rideService = sharding.entityRefFor(RideService.TypeKey, rsid);
+        TestProbe<RideService.RideResponse> probe = testKit.createTestProbe();
+
+        rideService.tell(new RideService.RequestRide("201", 10, 100, probe.getRef()));
+        RideService.RideResponse resp = probe.receiveMessage();
+        assert (resp.rideId == 2);
+        System.out.println("RIDE FOR CUSTOMER 201 STARTED");
+
+        cab.tell(new Cab.RideEnded(resp.rideId));
+        System.out.println("---- TEST 1_2 PASSED \n \n \n \n \n");
+    }
+
 
     //cab 101 signs in , customers  201 requests for ride
 //then customer 202 requests for ride
