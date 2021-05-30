@@ -29,11 +29,11 @@ public class Tests {
             + "  logging-filter = \"akka.event.slf4j.Slf4jLoggingFilter\"\n" + "  actor.provider=\"cluster\"\n"
             + "  actor.allow-java-serialization = on\n" + "  remote.artery.canonical.hostname = \"127.0.0.1\"\n"
             + "  remote.artery.canonical.port = 0\n"
-            + "  cluster.seed-nodes = [\"akka://ClusterSystem@127.0.0.1:25251\", \"akka://ClusterSystem@127.0.0.1:25252\"]\n"
+            + "  cluster.seed-nodes = [\"akka://cabs@127.0.0.1:25251\", \"akka://cabs@127.0.0.1:25252\"]\n"
             + "  cluster.downing-provider-class= \"akka.cluster.sbr.SplitBrainResolverProvider\"\n"
             + "  persistence.journal.plugin=\"akka.persistence.journal.proxy\"\n"
             + "  persistence.journal.proxy.target-journal-plugin=\"akka.persistence.journal.leveldb\"\n"
-            + "  persistence.journal.proxy.target-journal-address = \"akka://ClusterSystem@127.0.0.1:25251\"\n"
+            + "  persistence.journal.proxy.target-journal-address = \"akka://cabs@127.0.0.1:25251\"\n"
             + "  persistence.journal.proxy.start-target-journal = \"off\"\n" + "}"));
 
     public static void init() {
