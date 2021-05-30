@@ -5,14 +5,11 @@ import akka.actor.typed.Behavior;
 import akka.actor.typed.javadsl.*;
 import akka.cluster.sharding.typed.javadsl.EntityTypeKey;
 
-import java.util.HashMap;
-
 public class RideService extends AbstractBehavior<RideService.Command> {
     int fulfillSpawnCount;
     private final String rsid;
 
-    public interface Command {
-    }
+    public interface Command {}
 
     // Declare typekey for cluster sharding
     public static final EntityTypeKey<Command> TypeKey =
@@ -62,18 +59,6 @@ public class RideService extends AbstractBehavior<RideService.Command> {
         public RideEnded(String cabId, int newCabLocation) {
             this.cabId = cabId;
             this.newCabLocation = newCabLocation;
-        }
-    }
-
-    public static final class CabUpdate implements Command {
-        final String cabId;
-        final CabData cabData;
-        final int timestamp;
-
-        public CabUpdate(String cabId, CabData cabData, int timestamp) {
-            this.cabId = cabId;
-            this.cabData = cabData;
-            this.timestamp = timestamp;
         }
     }
 
@@ -136,7 +121,6 @@ public class RideService extends AbstractBehavior<RideService.Command> {
         builder.onMessage(RideResponse.class, this::onRideResponse);
         builder.onMessage(RideEnded.class, this::onRideEnded);
         builder.onMessage(Reset.class, this::onReset);
-        builder.onMessage(CabUpdate.class, this::onCabUpdate);
 
         return builder.build();
     }
@@ -176,10 +160,6 @@ public class RideService extends AbstractBehavior<RideService.Command> {
     }
 
     private Behavior<Command> onRideEnded(RideEnded message) {
-        return this;
-    }
-
-    private Behavior<Command> onCabUpdate(CabUpdate message) {
         return this;
     }
 

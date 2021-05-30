@@ -55,7 +55,7 @@ public class App {
       nextRideService = -1;
     }
 
-    ActorSystem<Void> system = ActorSystem.create(Main.create(nextRideService), "cabs");
+    ActorSystem<Void> system = ActorSystem.create(Main.create(nextRideService), "cabs", config);
     final ClusterSharding sharding = ClusterSharding.get(system);
 
     // initialize sharding for various entities
