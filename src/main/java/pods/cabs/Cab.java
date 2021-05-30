@@ -1,12 +1,24 @@
 package pods.cabs;
 
-import akka.actor.typed.ActorRef;
 import akka.actor.typed.Behavior;
-import akka.actor.typed.javadsl.*;
+import akka.actor.typed.ActorRef;
+import akka.actor.typed.javadsl.Receive;
+import akka.actor.typed.javadsl.AbstractBehavior;
+import akka.actor.typed.javadsl.Behaviors;
+import akka.actor.typed.javadsl.ActorContext;
 
-public class Cab extends AbstractBehavior<Cab.Command> {
+import akka.cluster.sharding.typed.javadsl.EntityTypeKey;
+import akka.persistence.typed.PersistenceId;
+import akka.persistence.typed.javadsl.CommandHandler;
+import akka.persistence.typed.javadsl.CommandHandlerBuilder;
+import akka.persistence.typed.javadsl.EventSourcedBehavior;
+import akka.persistence.typed.javadsl.Effect;
+import akka.persistence.typed.javadsl.EventHandler;
 
-    private String id;
+import com.fasterxml.jackson.annotation.JsonCreator;
+
+public class Cab extends EventSourcedBehavior<Cab.Command, Cab.CabEvent, Cab.PersistState> {
+
     private int numRides;
     private CabState state;
 
@@ -15,10 +27,14 @@ public class Cab extends AbstractBehavior<Cab.Command> {
     private int location;
     private int sourceLoc;
     private int destinationLoc;
+    
 
     private ActorRef<FulfillRide.Command> fulfillActor;
 
-    public interface Command {}
+    public static final EntityTypeKey<Command> TypeKey =
+    EntityTypeKey.create(Cab.Command.class, "CabPersistEntity");
+
+    public interface Command extends CborSerializable  {}
 
     /*
      * COMMAND DEFINITIONS
@@ -94,7 +110,7 @@ public class Cab extends AbstractBehavior<Cab.Command> {
         }
     }
 
-    /*
+     /*
      * RESPONSE 
      */
     public static final class NumRidesResponse {
@@ -106,20 +122,138 @@ public class Cab extends AbstractBehavior<Cab.Command> {
     }
 
 
+
+    // Event. 
+	interface CabEvent extends CborSerializable {}
+
+    public static final class RequestRideEvent implements CabEvent {
+		int dummy=0;
+	}
+	
+    public static final class SignInEvent implements CabEvent {
+		int dummy=0;
+	}
+
+    public static final class SignOutEvent implements CabEvent {
+		int dummy=0;
+	}
+
+    public static final class RideStartedEvent implements CabEvent {
+		int dummy=0;
+	}
+
+    public static final class RideCancelledEvent implements CabEvent {
+		int dummy=0;
+	}
+
+    public static final class RideEndedEvent implements CabEvent {
+		int dummy=0;
+	}
+
+    public static final class ResetEvent implements CabEvent {
+		int dummy=0;
+	}
+
+
+    // State
+	static final class PersistState implements CborSerializable {
+    public int numRides;
+    public CabState state;
+
+    public boolean interested;
+    public int rideId;
+    public int location;
+    public int sourceLoc;
+    public int destinationLoc;
+	}
+	
+    @Override
+	public PersistState emptyState() {
+		return new PersistState();
+	}
+
+
+    @Override
+	public CommandHandler<Command, CabEvent, PersistState> commandHandler() {
+        return newCommandHandlerBuilder().forAnyState()
+        .onCommand(RequestRide.class,   this::onRequestRide)
+        .onCommand(RideStarted.class,   this::onRideStarted)
+        .onCommand(RideCancelled.class, this::onRideCancelled)
+        .onCommand(RideEnded.class,     this::onRideEnded)
+        .onCommand(SignIn.class,        this::onSignIn)
+        .onCommand(SignOut.class,       this::onSignOut)
+        .onCommand(NumRides.class,      this::onNumRides)
+        .onCommand(Reset.class,         this::onReset)
+        .build();
+	}
+
+    //Event Handler
+
+    @Override
+	public EventHandler<PersistState, CabEvent> eventHandler() {
+		return newEventHandlerBuilder().forAnyState()
+
+				.onEvent(SignInEvent.class, (state, evt) -> {state.state=CabState.AVAILABLE; return state;})
+
+                .onEvent(SignOutEvent.class, (state, evt) -> {state.state=CabState.SIGNED_OUT; return state;})
+
+                .onEvent(RideStartedEvent.class, (state, evt) -> 
+                {
+                    state.state = CabState.GIVING_RIDE;
+                    state.location = sourceLoc;
+                    state.numRides++;
+                    return state;}  )
+
+                .onEvent(RideEndedEvent.class, (state, evt) -> 
+                {
+                    state.state = CabState.GIVING_RIDE;
+                    state.location = sourceLoc;
+                    state.numRides++;
+                    return state;}  )
+
+                .onEvent(RideCancelledEvent.class, (state, evt) -> 
+                {
+                    state.state = CabState.AVAILABLE;
+                       state.rideId = -1;
+                     state.sourceLoc = -1;
+                      state.destinationLoc = -1;}  )
+                
+              .onEvent(ResetEvent.class, (state, evt) -> 
+              {
+               state.numRides = 0;
+               state.state = CabState.SIGNED_OUT;
+               state.rideId = -1;
+               state.location = 0;
+               state.interested = true;
+               state.sourceLoc = -1;
+               state.destinationLoc = -1;}  )
+
+				.build();
+	}
+
+
+
+	
+
+
+    
+
+   
+
+
     /*
      * INITIALIZATION
      */
-    public static Behavior<Command> create(String id) {
+    public static Behavior<Command> create(String EntityId,PersistenceId persistenceId) {
         return Behaviors.setup(
 	        context -> {
-                return new Cab(context, id);
+                return new Cab(context,persistenceId);
 	        }
         );
     }
 
-    private Cab(ActorContext<Command> context, String id) {
-        super(context);
-        this.id = id;
+    private Cab(ActorContext<Command> context,PersistenceId persistenceId) {
+        super(persistenceId);
         this.numRides = 0;
         this.state = CabState.SIGNED_OUT;
         this.rideId = -1;
@@ -129,26 +263,9 @@ public class Cab extends AbstractBehavior<Cab.Command> {
         this.destinationLoc = -1;
     }
 
-    /*
-     * MESSAGE HANDLING
-     */
-    @Override
-    public Receive<Command> createReceive() {
-        ReceiveBuilder<Command> builder = newReceiveBuilder();
+    
 
-        builder.onMessage(RequestRide.class,   this::onRequestRide);
-        builder.onMessage(RideStarted.class,   this::onRideStarted);
-        builder.onMessage(RideCancelled.class, this::onRideCancelled);
-        builder.onMessage(RideEnded.class,     this::onRideEnded);
-        builder.onMessage(SignIn.class,        this::onSignIn);
-        builder.onMessage(SignOut.class,       this::onSignOut);
-        builder.onMessage(NumRides.class,      this::onNumRides);
-        builder.onMessage(Reset.class,         this::onReset);
-
-        return builder.build();
-    }
-
-    private Behavior<Command> onRequestRide(RequestRide message) {
+    private Effect<CabEvent,PersistState> onRequestRide(RequestRide message) {
         if(interested) {
             interested = false;
         } else {
@@ -180,7 +297,7 @@ public class Cab extends AbstractBehavior<Cab.Command> {
         return this;
     }
 
-    private Behavior<Command> onRideStarted(RideStarted message) {
+    private Effect<CabEvent,PersistState> onRideStarted(RideStarted message) {
         // Must be comitted to start ride
         if(state != CabState.COMMITTED) {
             message.replyTo.tell(new FulfillRide.RideStartedResponse(false));
@@ -196,7 +313,7 @@ public class Cab extends AbstractBehavior<Cab.Command> {
         return this;
     }
 
-    private Behavior<Command> onRideCancelled(RideCancelled message) {
+    private Effect<CabEvent,PersistState> onRideCancelled(RideCancelled message) {
         // Can cancel only if cab is committed and valid ride ID was sent
         if(this.state != CabState.COMMITTED || this.rideId != message.rideId) {
             message.replyTo.tell(new FulfillRide.RideCancelledResponse(false));
@@ -212,7 +329,7 @@ public class Cab extends AbstractBehavior<Cab.Command> {
         return this;
     }
 
-    private Behavior<Command> onRideEnded(RideEnded message) {
+    private Effect<CabEvent,PersistState> onRideEnded(RideEnded message) {
         // Can't end ride if not giving ride, or ride ID is invalid
         if(this.state != CabState.GIVING_RIDE || this.rideId != message.rideId)
             return this;
@@ -231,7 +348,7 @@ public class Cab extends AbstractBehavior<Cab.Command> {
         return this;
     }
 
-    private Behavior<Command> onSignIn(SignIn message) {
+    private Effect<CabEvent,PersistState> onSignIn(SignIn message) {
         // Can sign-in only if signed-out and initial position is non-negative
         boolean signInAllowed = (state == CabState.SIGNED_OUT && message.initialPos >= 0);
 
@@ -251,7 +368,7 @@ public class Cab extends AbstractBehavior<Cab.Command> {
         return this;
     }
 
-    private Behavior<Command> onSignOut(SignOut message) {
+    private Effect<CabEvent,PersistState>onSignOut(SignOut message) {
         // Cab shouldn't already be signed out, or in giving-ride or committed state
         boolean signOutAllowed = (state != CabState.SIGNED_OUT &&
                                   state != CabState.GIVING_RIDE &&
@@ -259,27 +376,33 @@ public class Cab extends AbstractBehavior<Cab.Command> {
 
         if(signOutAllowed) {
             // update variables
-            state = CabState.SIGNED_OUT;
-            location = 0;
-            interested = true;
-            numRides = 0;
-
-            // send sign-out message to a random ride service instance
+           return Effect().persist(new SignOutEvent())
+            .thenRun(newState -> 
+            {
+                System.out.println("reseting cab " + this.persistenceId() );
+                // send sign-out message to a random ride service instance
             int randomIndex = (int) (Math.random() * Globals.rideService.size());
             Globals.rideService.get(randomIndex).tell(new RideService.CabSignsOut(
-                this.id
-            ));
+                this.id));
+            }
+                    );
+
+            
         }
 
-        return this;
+        return Effect().none()
+				.thenRun(newState -> 
+							System.out.println("SignIn Failed"));
     }
 
-    private Behavior<Command> onNumRides(NumRides message) {
-        message.replyTo.tell(new NumRidesResponse(this.numRides));
-        return this;
+    private Effect<CabEvent,PersistState> onNumRides(NumRides message) {
+        
+        return Effect().none()
+        .thenRun(newState -> 
+        message.replyTo.tell(new NumRidesResponse(this.numRides)));
     }
 
-    private Behavior<Command> onReset(Reset message) {
+    private Effect<CabEvent,PersistState> onReset(Reset message) {
         message.replyTo.tell(new NumRidesResponse(this.numRides));
 
         // First, check if currently giving ride. If so, end ride.
@@ -313,14 +436,10 @@ public class Cab extends AbstractBehavior<Cab.Command> {
         }
 
         // As a final measure, reset all variables manually
-        this.numRides = 0;
-        this.state = CabState.SIGNED_OUT;
-        this.rideId = -1;
-        this.location = 0;
-        this.interested = true;
-        this.sourceLoc = -1;
-        this.destinationLoc = -1;
+        
 
-        return this;
+        return Effect().persist(new ResetEvent())
+				.thenRun(newState -> 
+						System.out.println("resetting cab " + this.persistenceId() ));
     }
 }
