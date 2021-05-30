@@ -8,6 +8,9 @@ import java.util.Scanner;
 import akka.actor.typed.ActorRef;
 import akka.actor.typed.Behavior;
 import akka.actor.typed.javadsl.*;
+import akka.cluster.sharding.typed.javadsl.ClusterSharding;
+import akka.cluster.sharding.typed.javadsl.Entity;
+import akka.cluster.sharding.typed.javadsl.EntityRef;
 
 public class Main {
 
@@ -51,11 +54,16 @@ public class Main {
                 System.out.println("ERROR: Could not read input file!");
             }
             
-            // Create 3 RideService actors
-            for (int i = nextRideService; i < nextRideService + 3; i++) {
-                String name = "ride-actor-" + Integer.toString(i);
-                ActorRef<RideService.Command> tmpRide = context.spawn(RideService.create(), name);
-                Globals.rideService.add(tmpRide);
+            // If nextRideService is positive, create 3 more RideService entities
+            if(nextRideService > 0) {
+                final ClusterSharding sharding = ClusterSharding.get(context.getSystem());
+
+                for (int i = nextRideService; i < nextRideService + 3; i++) {
+                    String name = "ride-actor-" + Integer.toString(i);
+
+                    // hopefully this will spawn the rideservice on the same node
+                    EntityRef<RideService.Command> ref = sharding.entityRefFor(RideService.TypeKey, name);
+                }
             }
 
             // Will accept no more messages

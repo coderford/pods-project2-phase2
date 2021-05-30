@@ -27,6 +27,16 @@
           <version>${akka.version}</version>
         </dependency>
         <dependency>
+            <groupId>com.typesafe.akka</groupId>
+            <artifactId>akka-cluster-sharding-typed_2.13</artifactId>
+            <version>${akka.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.typesafe.akka</groupId>
+            <artifactId>akka-persistence-typed_2.13</artifactId>
+            <version>${akka.version}</version>
+        </dependency>
+        <dependency>
           <groupId>com.typesafe.akka</groupId>
           <artifactId>akka-serialization-jackson_2.13</artifactId>
           <version>${akka.version}</version>
@@ -64,7 +74,7 @@
                     <arguments>
                         <argument>-classpath</argument>
                         <classpath />
-                        <argument>pods.cabs.ApplicationMain</argument>
+                        <argument>pods.cabs.App</argument>
                     </arguments>
                 </configuration>
             </plugin>

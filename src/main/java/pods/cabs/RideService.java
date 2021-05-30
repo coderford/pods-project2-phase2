@@ -3,14 +3,20 @@ package pods.cabs;
 import akka.actor.typed.ActorRef;
 import akka.actor.typed.Behavior;
 import akka.actor.typed.javadsl.*;
+import akka.cluster.sharding.typed.javadsl.EntityTypeKey;
+
 import java.util.HashMap;
 
 public class RideService extends AbstractBehavior<RideService.Command> {
-    // CabData HashMap
-    int fulfillSpawnCount = 0;
+    int fulfillSpawnCount;
+    private final String rsid;
 
     public interface Command {
     }
+
+    // Declare typekey for cluster sharding
+    public static final EntityTypeKey<Command> TypeKey =
+        EntityTypeKey.create(RideService.Command.class, "RideServiceEntity");
 
     /*
      * COMMAND DEFINITIONS
@@ -105,15 +111,16 @@ public class RideService extends AbstractBehavior<RideService.Command> {
     /*
      * INITIALIZATION
      */
-    public static Behavior<Command> create() {
+    public static Behavior<Command> create(String rsid) {
         return Behaviors.setup(context -> {
-            return new RideService(context);
+            return new RideService(context, rsid);
         });
     }
 
-    private RideService(ActorContext<Command> context) {
+    private RideService(ActorContext<Command> context, String rsid) {
         super(context);
         this.fulfillSpawnCount = 0;
+        this.rsid = rsid;
     }
 
     /*

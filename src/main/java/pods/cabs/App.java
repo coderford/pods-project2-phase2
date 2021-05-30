@@ -1,6 +1,9 @@
 package pods.cabs;
 
 import akka.actor.typed.ActorSystem;
+import akka.cluster.sharding.typed.javadsl.ClusterSharding;
+import akka.cluster.sharding.typed.javadsl.Entity;
+
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 
@@ -47,7 +50,20 @@ public class App {
     } else if(port == 25254) {
       nextRideService = 10;
     }
+    
+    if(!firstTime) {
+      nextRideService = -1;
+    }
 
     ActorSystem<Void> system = ActorSystem.create(Main.create(nextRideService), "cabs");
+    final ClusterSharding sharding = ClusterSharding.get(system);
+
+    // initialize sharding for various entities
+    sharding.init(
+        Entity.of(
+            RideService.TypeKey, 
+            entityContext -> RideService.create(entityContext.getEntityId())
+        )
+    );
   }
 }
