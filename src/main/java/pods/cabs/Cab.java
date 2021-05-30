@@ -24,13 +24,11 @@ public class Cab extends EventSourcedBehavior<Cab.Command, Cab.CabEvent, Cab.Per
      * COMMAND DEFINITIONS
      */
     public static final class RequestRide implements Command {
-        final int rideId;
         final int sourceLoc;
         final int destinationLoc;
         final ActorRef<FulfillRide.Command> replyTo;
 
-        public RequestRide(int rideId, int sourceLoc, int destinationLoc, ActorRef<FulfillRide.Command> replyTo) {
-            this.rideId = rideId;
+        public RequestRide(int sourceLoc, int destinationLoc, ActorRef<FulfillRide.Command> replyTo) {
             this.sourceLoc = sourceLoc;
             this.destinationLoc = destinationLoc;
             this.replyTo = replyTo;
@@ -112,13 +110,11 @@ public class Cab extends EventSourcedBehavior<Cab.Command, Cab.CabEvent, Cab.Per
 
     public static final class RequestRideEvent implements CabEvent {
         int dummy = 0;
-        int rideId;
         int sourceLoc;
         int destinationLoc;
         ActorRef<FulfillRide.Command> replyTo;
 
-        public RequestRideEvent(int rideId, int sourceLoc, int destinationLoc, ActorRef<FulfillRide.Command> replyTo) {
-            this.rideId = rideId;
+        public RequestRideEvent(int sourceLoc, int destinationLoc, ActorRef<FulfillRide.Command> replyTo) {
             this.sourceLoc = sourceLoc;
             this.destinationLoc = destinationLoc;
             this.replyTo = replyTo;
@@ -173,6 +169,7 @@ public class Cab extends EventSourcedBehavior<Cab.Command, Cab.CabEvent, Cab.Per
 
         public boolean interested;
         public int rideId;
+        public int nextRideId;
         public int location;
         public int sourceLoc;
         public int destinationLoc;
@@ -185,6 +182,7 @@ public class Cab extends EventSourcedBehavior<Cab.Command, Cab.CabEvent, Cab.Per
             this.numRides = 0;
             this.status = CabState.SIGNED_OUT;
             this.rideId = -1;
+            this.nextRideId = Integer.parseInt(this.id)*10000 + 1;
             this.location = 0;
             this.interested = true;
             this.sourceLoc = -1;
@@ -227,16 +225,15 @@ public class Cab extends EventSourcedBehavior<Cab.Command, Cab.CabEvent, Cab.Per
 
     private Effect<CabEvent, PersistState> onRequestRide(RequestRide message) {
         return Effect().persist(new RequestRideEvent(
-            message.rideId,
             message.sourceLoc,
             message.destinationLoc,
             message.replyTo
         )).thenRun(
             newState -> {
                 if(newState.status == CabState.COMMITTED) {
-                    message.replyTo.tell(new FulfillRide.RequestRideResponse(true));
+                    message.replyTo.tell(new FulfillRide.RequestRideResponse(true, newState.rideId));
                 } else {
-                    message.replyTo.tell(new FulfillRide.RequestRideResponse(false));
+                    message.replyTo.tell(new FulfillRide.RequestRideResponse(false, newState.rideId));
                 }
             }
         );
@@ -363,7 +360,8 @@ public class Cab extends EventSourcedBehavior<Cab.Command, Cab.CabEvent, Cab.Per
             // Accept ride only if current state is available
             if(state.status == CabState.AVAILABLE) {
                 state.fulfillActor = evt.replyTo;
-                state.rideId = evt.rideId;
+                state.rideId = state.nextRideId;
+                state.nextRideId += 1;
                 state.status = CabState.COMMITTED;
                 state.sourceLoc = evt.sourceLoc;
                 state.destinationLoc = evt.destinationLoc;

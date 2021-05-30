@@ -1,19 +1,19 @@
 package pods.cabs;
 
-import java.util.Comparator;
-import java.util.HashMap;
+import java.io.File;
 import java.util.List;
-import java.util.stream.Collectors;
+import java.util.Scanner;
 
 import akka.actor.typed.ActorRef;
 import akka.actor.typed.Behavior;
 import akka.actor.typed.javadsl.*;
+import akka.cluster.sharding.typed.javadsl.ClusterSharding;
 
 public class FulfillRide extends AbstractBehavior<FulfillRide.Command> {
-    private List<CabData> cabList;
+    private ClusterSharding sharding;
+    private List<String> cabList;
 
     private int nextRideId;
-    private int requestCount;
     private int nextCabIndex;
     private int fareCalculated;
     private String requestedCabId;
@@ -71,9 +71,11 @@ public class FulfillRide extends AbstractBehavior<FulfillRide.Command> {
 
     public static final class RequestRideResponse implements Command {
         final boolean accepted;
+        final int rideId;
 
-        public RequestRideResponse(boolean accepted) {
+        public RequestRideResponse(boolean accepted, int rideId) {
             this.accepted = accepted;
+            this.rideId = rideId;
         }
     }
 
@@ -93,14 +95,6 @@ public class FulfillRide extends AbstractBehavior<FulfillRide.Command> {
         }
     }
 
-    public static final class WrappedResponseBalance implements Command {
-        final Wallet.ResponseBalance response;
-        
-        public WrappedResponseBalance(Wallet.ResponseBalance response) {
-            this.response = response;
-        }
-    }
-
     /*
      * INITIALIZATION
      */
@@ -115,9 +109,12 @@ public class FulfillRide extends AbstractBehavior<FulfillRide.Command> {
     private FulfillRide(ActorContext<Command> context) {
         super(context);
         this.curState = FFState.REQ_CABS;
-        this.requestCount = 0;
         this.nextCabIndex = 0;
         this.requestedCabId = "";
+
+        this.sharding = ClusterSharding.get(this.getContext().getSystem());
+
+        populateCabList();
     }
 
     /*
@@ -129,7 +126,6 @@ public class FulfillRide extends AbstractBehavior<FulfillRide.Command> {
 
         builder.onMessage(FulfillRideRequest.class, this::onFulfillRideRequest);
         builder.onMessage(RequestRideResponse.class, this::onRequestRideResponse);
-        builder.onMessage(WrappedResponseBalance.class, this::onWrappedResponseBalance);
         builder.onMessage(RideEndedByCab.class, this::onRideEndedByCab);
         builder.onMessage(RideStartedResponse.class, this::onRideStartedResponse);
         builder.onMessage(RideCancelledResponse.class, this::onRideCancelledResponse);
@@ -141,11 +137,8 @@ public class FulfillRide extends AbstractBehavior<FulfillRide.Command> {
         this.origMessage = message;
         // Will try to find an available cab and start a ride
         
-        // - get a new rideId
-        this.nextRideId = Globals.getNextRideId();
-
         // - in the list, send a ride request to the first available ride, then change state
-        if(requestCount < 3) requestNextCab();
+        requestNextCab();
 
         // - if no available cab was found, terminate
         if(this.curState != FFState.WAIT_FOR_CAB) {
@@ -168,13 +161,15 @@ public class FulfillRide extends AbstractBehavior<FulfillRide.Command> {
 
             if(message.accepted) {
                 // Send ride started, and send ride response to ride service
-                Globals.cabs.get(cabDataMap.get(requestedCabId).id).tell(new Cab.RideStarted(
+                this.nextRideId = message.rideId;
+
+                sharding.entityRefFor(Cab.TypeKey, requestedCabId).tell(new Cab.RideStarted(
                     this.nextRideId,
                     getContext().getSelf()
                 ));
 
                 origMessage.replyTo.tell(new RideService.RideResponse(
-                    nextRideId,
+                    message.rideId,
                     requestedCabId,
                     fareCalculated,
                     getContext().getSelf(),
@@ -206,11 +201,6 @@ public class FulfillRide extends AbstractBehavior<FulfillRide.Command> {
         return this;
     }
 
-    private Behavior<Command> onWrappedResponseBalance(WrappedResponseBalance message) {
-        // deduction was successul; start ride, tell parent and wait for rideEnded from cab
-        return this;
-    }
-
     private Behavior<Command> onRideEndedByCab(RideEndedByCab message) {
         // tell parent
         origMessage.replyTo.tell(new RideService.RideEnded(requestedCabId, message.newCabLocation));
@@ -229,24 +219,39 @@ public class FulfillRide extends AbstractBehavior<FulfillRide.Command> {
         // This method goes through the cab list (while forwarding the nextCabIndex)
         // and stops after sending request to next available cab
         while(nextCabIndex < cabList.size()) {
-            getContext().getLog().info("-- nextCabIndex = " + nextCabIndex);
-            CabData c = cabList.get(nextCabIndex);
+            String cid = cabList.get(nextCabIndex);
             nextCabIndex++;
 
-            if(c.state == CabState.AVAILABLE) {
-                getContext().getLog().info("Cab " + c.id + " is available");
-                requestCount++;
-                Globals.cabs.get(c.id).tell(new Cab.RequestRide(
-                    nextRideId,
-                    origMessage.sourceLoc,
-                    origMessage.destinationLoc,
-                    this.getContext().getSelf()
-                ));
+            sharding.entityRefFor(Cab.TypeKey, cid).tell(new Cab.RequestRide(
+                origMessage.sourceLoc,
+                origMessage.destinationLoc,
+                this.getContext().getSelf()
+            ));
 
-                this.requestedCabId = c.id;
-                this.curState = FFState.WAIT_FOR_CAB;
-                break;
+            this.requestedCabId = cid;
+            this.curState = FFState.WAIT_FOR_CAB;
+            break;
+        }
+    }
+
+    private void populateCabList() {
+        try {
+            File inputFile = new File("IDs.txt");
+            Scanner in = new Scanner(inputFile);
+
+            int section = 0;
+            while (in.hasNextLine()) {
+                String line = in.nextLine();
+                if (line.compareTo("****") == 0) {
+                    section++;
+                } else if (section == 1) {
+                    this.cabList.add(line);
+                } 
             }
+
+            in.close();
+        } catch (Exception e) {
+            System.out.println("ERROR: Could not read input file!");
         }
     }
 }
