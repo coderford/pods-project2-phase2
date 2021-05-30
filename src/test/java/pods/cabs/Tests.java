@@ -212,13 +212,13 @@ public class Tests {
         TestProbe<RideService.RideResponse> probe3 = testKit.createTestProbe();
 
 
-    Demo R1 = new  Demo(probe1, "201");
+    Demo R1 = new  Demo(probe1, "201",sharding);
     R1.start();
 
-    Demo R2 = new  Demo(probe2, "202");
+    Demo R2 = new  Demo(probe2, "202",sharding);
     R2.start();
 
-    Demo R3 = new Demo(probe3, "203");
+    Demo R3 = new Demo(probe3, "203",sharding);
     R3.start();
 
 
@@ -232,10 +232,11 @@ class Demo extends Thread {
     
     private String threadid;
     private TestProbe<RideService.RideResponse> threadprobe;
-  
-    Demo(TestProbe<RideService.RideResponse> probe, String id) {
+    private ClusterSharding threadsharding;
+    Demo(TestProbe<RideService.RideResponse> probe, String id,ClusterSharding sharding) {
       threadprobe = probe;
       threadid = id;
+      threadsharding=sharding;
     
   
     }
@@ -243,7 +244,8 @@ class Demo extends Thread {
     public void run() {
   
         Random rand=new Random();
-          ActorRef<RideService.Command> rideService = Globals.rideService.get(rand.nextInt(10));
+        String rsid = "ride-actor-" + rand.nextInt(12) + 1;
+        EntityRef<Command> rideService = threadsharding.entityRefFor(RideService.TypeKey, rsid);
   
           rideService.tell(new RideService.RequestRide(threadid, 10, 100, threadprobe.getRef()));
           RideService.RideResponse resp = threadprobe.receiveMessage();
