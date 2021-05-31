@@ -223,7 +223,13 @@ public class Cab extends EventSourcedBehavior<Cab.Command, Cab.CabEvent, Cab.Per
         public int destinationLoc;
 
         public ActorRef<FulfillRide.Command> fulfillActor;
+
+        // These are not-mandatory variables that help in passing information
+        // between event handler and command handler
         public boolean rideWasEndedOnReset;
+        public boolean rideRequestAccepted;
+        public boolean rideStartedSuccessful;
+        public boolean rideCancelledSuccessful;
 
         public PersistState(String id) {
             this.id = id;
@@ -236,6 +242,9 @@ public class Cab extends EventSourcedBehavior<Cab.Command, Cab.CabEvent, Cab.Per
             this.sourceLoc = -1;
             this.destinationLoc = -1;
             this.rideWasEndedOnReset = false;
+            this.rideRequestAccepted = false;
+            this.rideStartedSuccessful = false;
+            this.rideCancelledSuccessful = false;
         }
     }
 
@@ -278,7 +287,7 @@ public class Cab extends EventSourcedBehavior<Cab.Command, Cab.CabEvent, Cab.Per
             message.replyTo
         )).thenRun(
             newState -> {
-                if(newState.status == CabState.COMMITTED) {
+                if(newState.rideRequestAccepted) {
                     message.replyTo.tell(new FulfillRide.RequestRideResponse(true, newState.rideId));
                 } else {
                     message.replyTo.tell(new FulfillRide.RequestRideResponse(false, newState.rideId));
@@ -290,7 +299,7 @@ public class Cab extends EventSourcedBehavior<Cab.Command, Cab.CabEvent, Cab.Per
     private Effect<CabEvent, PersistState> onRideStarted(RideStarted message) {
         return Effect().persist(new RideStartedEvent()).thenRun(
             newState -> {
-                if(newState.status == CabState.GIVING_RIDE)
+                if(newState.rideStartedSuccessful)
                     message.replyTo.tell(new FulfillRide.RideStartedResponse(false));
                 else
                     message.replyTo.tell(new FulfillRide.RideStartedResponse(true));
@@ -301,7 +310,7 @@ public class Cab extends EventSourcedBehavior<Cab.Command, Cab.CabEvent, Cab.Per
     private Effect<CabEvent, PersistState> onRideCancelled(RideCancelled message) {
         return Effect().persist(new RideCancelledEvent(message.rideId)).thenRun(
             newState -> {
-                if(newState.status == CabState.COMMITTED) {
+                if(newState.rideCancelledSuccessful) {
                     message.replyTo.tell(new FulfillRide.RideCancelledResponse(false));
                 } else {
                     message.replyTo.tell(new FulfillRide.RideCancelledResponse(true));
@@ -395,6 +404,8 @@ public class Cab extends EventSourcedBehavior<Cab.Command, Cab.CabEvent, Cab.Per
             return state;
         })
         .onEvent(RequestRideEvent.class, (state,evt) -> {
+            state.rideRequestAccepted = false;
+
             if(state.interested) {
                 state.interested = false;
             } else {
@@ -415,11 +426,13 @@ public class Cab extends EventSourcedBehavior<Cab.Command, Cab.CabEvent, Cab.Per
                 state.status = CabState.COMMITTED;
                 state.sourceLoc = evt.sourceLoc;
                 state.destinationLoc = evt.destinationLoc;
+                state.rideRequestAccepted = true;
             }
 
             return state;
         })
         .onEvent(RideStartedEvent.class, (state, evt) -> {
+            state.rideStartedSuccessful = false;
             if (state.status != CabState.COMMITTED) {
                 return state;
             }
@@ -427,6 +440,7 @@ public class Cab extends EventSourcedBehavior<Cab.Command, Cab.CabEvent, Cab.Per
             state.status = CabState.GIVING_RIDE;
             state.location = state.sourceLoc;
             state.numRides++;
+            state.rideStartedSuccessful = true;
 
             return state;
         })
@@ -444,6 +458,7 @@ public class Cab extends EventSourcedBehavior<Cab.Command, Cab.CabEvent, Cab.Per
             return state;
         })
         .onEvent(RideCancelledEvent.class, (state, evt) -> {
+            state.rideCancelledSuccessful = false;
             // Cannot cancel if not committed or ride id does not match
             if (state.status != CabState.COMMITTED || state.rideId != evt.rideId) {
                 return state;
@@ -453,6 +468,7 @@ public class Cab extends EventSourcedBehavior<Cab.Command, Cab.CabEvent, Cab.Per
             state.rideId = -1;
             state.sourceLoc = -1;
             state.destinationLoc = -1;
+            state.rideCancelledSuccessful = true;
 
             return state;
         })

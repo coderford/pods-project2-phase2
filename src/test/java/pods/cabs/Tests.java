@@ -8,6 +8,8 @@ import akka.cluster.sharding.typed.javadsl.Entity;
 import akka.cluster.sharding.typed.javadsl.EntityRef;
 import akka.persistence.typed.PersistenceId;
 import pods.cabs.RideService.Command;
+
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 import java.time.Duration;
@@ -21,6 +23,9 @@ import org.junit.Test;
 
 public class Tests {
     private static ClusterSharding sharding;
+    public static int count1ForTest3 = 0;
+    public static int count2ForTest3 = 0;
+    public static int count3ForTest3 = 0;
 
     @ClassRule
     public static final TestKitJunitResource testKit = new TestKitJunitResource(ActorTestKit.create("cabs"));
@@ -44,7 +49,7 @@ public class Tests {
                 entityContext -> RideService.create(entityContext.getEntityId())
             )
         );
-        printMessageBig("Initialization successful");
+        printMessage("Sharding initialization successful");
     }
 
     public static void printMessage(String message) {
@@ -99,8 +104,6 @@ public class Tests {
     // test PASSED if customer 201 is assigned ride and customer 202 is rejected
     @Test
     public void test2() {
-        init();
-
         TestProbe<Cab.NumRidesResponse> cabResetProbe = testKit.createTestProbe();
         for(int i=101;i<=104;i++) 
         {
@@ -147,7 +150,6 @@ public class Tests {
     @Test
     public void test3()
     {
-        init();
         TestProbe<Cab.NumRidesResponse> cabResetProbe = testKit.createTestProbe();
         for(int i=101;i<=104;i++) 
         {
@@ -184,16 +186,14 @@ public class Tests {
         R3.start();
 
         try {
-            Thread.sleep(5000);
-            /*
-            R1.join(); 
-            R2.join(); 
-            R3.join();
-            */
+            Thread.sleep(3000);
         }
         catch(Exception e) {
             System.err.println("[ERROR] Some error occured while joining threads");
         }
+
+        assertEquals(3, count1ForTest3 + count2ForTest3 + count3ForTest3);
+        printMessageBig("TEST 3 PASSED");
     }
 }
 
@@ -219,6 +219,13 @@ class Demo extends Thread {
           RideService.RideResponse resp = threadprobe.receiveMessage();
           assert(resp.rideId != -1);
       
+          if(threadid.equals("201"))
+            Tests.count1ForTest3 = 1;
+          if(threadid.equals("202"))
+            Tests.count2ForTest3 = 1;
+          if(threadid.equals("203"))
+            Tests.count3ForTest3 = 1;
+
           Tests.printMessage("[Thread " + threadid +"] Ride for customer "+threadid+" started with cab "+resp.cabId);
     }
   
