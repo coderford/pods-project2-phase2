@@ -80,9 +80,9 @@ public class Tests {
 
         printMessage("Cabs reset successful");
 
-        EntityRef<Cab.Command> cab = sharding.entityRefFor(Cab.TypeKey, "101");
+        EntityRef<Cab.Command> cab = sharding.entityRefFor(Cab.TypeKey, "102");
         cab.tell(new Cab.SignIn(10));
-        printMessage("Cab 101 signed in");
+        printMessage("Cab 102 signed in");
 
         Random rand = new Random();
         String rsid = "ride-actor-" + (rand.nextInt(12) + 1);
@@ -123,7 +123,7 @@ public class Tests {
         
         TestProbe<RideService.RideResponse> probe = testKit.createTestProbe();
 
-        String rsid = "ride-actor-" + rand.nextInt(12) + 1;
+        String rsid = "ride-actor-" + (rand.nextInt(12) + 1);
         EntityRef<Command> rideService = sharding.entityRefFor(RideService.TypeKey, rsid);
 
         rideService.tell(new RideService.RequestRide("201", 10, 100, probe.getRef()));
@@ -132,7 +132,7 @@ public class Tests {
         printMessage("Ride for customer 201 started");
 
 
-         rsid = "ride-actor-" + rand.nextInt(12) + 1;
+         rsid = "ride-actor-" + (rand.nextInt(12) + 1);
          rideService = sharding.entityRefFor(RideService.TypeKey, rsid);
 
         rideService.tell(new RideService.RequestRide("202", 20, 100, probe.getRef()));
@@ -195,46 +195,97 @@ public class Tests {
         assertEquals(3, count1ForTest3 + count2ForTest3 + count3ForTest3);
         printMessageBig("TEST 3 PASSED");
     }
+
+    // This one checks the interest mechanism of cabs
+    @Test
+    public void test4() {
+        TestProbe<Cab.NumRidesResponse> cabResetProbe = testKit.createTestProbe();
+        for(int i=101;i<=104;i++) 
+        {
+            EntityRef<Cab.Command> cab = sharding.entityRefFor(Cab.TypeKey, Integer.toString(i));
+            cab.tell(new Cab.Reset(cabResetProbe.getRef()));
+            Cab.NumRidesResponse resp = cabResetProbe.receiveMessage(Duration.ofSeconds(5));
+        }
+
+        printMessage("Cabs reset successful");
+
+        Random rand=new Random();
+
+        EntityRef<Cab.Command> cab101 = sharding.entityRefFor(Cab.TypeKey, "101");
+        cab101.tell(new Cab.SignIn(10));
+        printMessage("Cab 101 signed in");
+
+        
+        TestProbe<RideService.RideResponse> probe = testKit.createTestProbe();
+
+        String rsid = "ride-actor-" + (rand.nextInt(12) + 1);
+        EntityRef<Command> rideService = sharding.entityRefFor(RideService.TypeKey, rsid);
+
+        // Customer 201 requests a ride
+        rideService.tell(new RideService.RequestRide("201", 10, 100, probe.getRef()));
+        RideService.RideResponse resp = probe.receiveMessage();
+        assert(resp.rideId != -1);
+        printMessage("Ride for customer 201 started");
+
+        cab101.tell(new Cab.RideEnded(resp.rideId));
+
+        // Customer 202 requests a ride, but cab is not interested
+        rsid = "ride-actor-" + (rand.nextInt(12) + 1);
+        rideService.tell(new RideService.RequestRide("202", 10, 100, probe.getRef()));
+        resp = probe.receiveMessage();
+        assert(resp.rideId == -1);
+        printMessage("Ride for customer 202 failed, since cab is not interested");
+
+        // Customer 202 requests a ride again, and this time it should be accepted
+        rsid = "ride-actor-" + (rand.nextInt(12) + 1);
+        rideService.tell(new RideService.RequestRide("202", 10, 100, probe.getRef()));
+        resp = probe.receiveMessage();
+        assert(resp.rideId != -1);
+        printMessage("Ride for customer 202 succeeded on second try");
+
+        printMessageBig("TEST 4 PASSED");
+    }
 }
 
 class Demo extends Thread {
     private Thread t;
-    
+
     private String threadid;
     private TestProbe<RideService.RideResponse> threadprobe;
     private ClusterSharding threadsharding;
-    Demo(TestProbe<RideService.RideResponse> probe, String id,ClusterSharding sharding) {
-      threadprobe = probe;
-      threadid = id;
-      threadsharding=sharding;
+
+    Demo(TestProbe<RideService.RideResponse> probe, String id, ClusterSharding sharding) {
+        threadprobe = probe;
+        threadid = id;
+        threadsharding = sharding;
     }
-  
+
     public void run() {
-  
-        Random rand=new Random();
-        String rsid = "ride-actor-" + rand.nextInt(12) + 1;
+
+        Random rand = new Random();
+        String rsid = "ride-actor-" + (rand.nextInt(12) + 1);
         EntityRef<Command> rideService = threadsharding.entityRefFor(RideService.TypeKey, rsid);
-  
-          rideService.tell(new RideService.RequestRide(threadid, 10, 100, threadprobe.getRef()));
-          RideService.RideResponse resp = threadprobe.receiveMessage();
-          assert(resp.rideId != -1);
-      
-          if(threadid.equals("201"))
+
+        rideService.tell(new RideService.RequestRide(threadid, 10, 100, threadprobe.getRef()));
+        RideService.RideResponse resp = threadprobe.receiveMessage();
+        assert (resp.rideId != -1);
+
+        if (threadid.equals("201"))
             Tests.count1ForTest3 = 1;
-          if(threadid.equals("202"))
+        if (threadid.equals("202"))
             Tests.count2ForTest3 = 1;
-          if(threadid.equals("203"))
+        if (threadid.equals("203"))
             Tests.count3ForTest3 = 1;
 
-          Tests.printMessage("[Thread " + threadid +"] Ride for customer "+threadid+" started with cab "+resp.cabId);
+        Tests.printMessage(
+                "[Thread " + threadid + "] Ride for customer " + threadid + " started with cab " + resp.cabId);
     }
-  
+
     public void start() {
-   
-      if (t == null) {
-        t = new Thread(this, threadid);
-        t.start();
-      }
+
+        if (t == null) {
+            t = new Thread(this, threadid);
+            t.start();
+        }
     }
-  }
-  
+}

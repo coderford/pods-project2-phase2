@@ -92,7 +92,7 @@ public class Cab extends EventSourcedBehavior<Cab.Command, Cab.CabEvent, Cab.Per
     }
 
     public static final class SignOut implements Command {
-
+        int dummy = 0;
     }
 
     public static final class NumRides implements Command {
