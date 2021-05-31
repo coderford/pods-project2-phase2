@@ -24,9 +24,13 @@ public class Cab extends EventSourcedBehavior<Cab.Command, Cab.CabEvent, Cab.Per
      * COMMAND DEFINITIONS
      */
     public static final class RequestRide implements Command {
-        final int sourceLoc;
-        final int destinationLoc;
-        final ActorRef<FulfillRide.Command> replyTo;
+        int sourceLoc;
+        int destinationLoc;
+        ActorRef<FulfillRide.Command> replyTo;
+
+        public RequestRide() {
+            super();
+        }
 
         public RequestRide(int sourceLoc, int destinationLoc, ActorRef<FulfillRide.Command> replyTo) {
             this.sourceLoc = sourceLoc;
@@ -36,8 +40,12 @@ public class Cab extends EventSourcedBehavior<Cab.Command, Cab.CabEvent, Cab.Per
     }
 
     public static final class RideStarted implements Command {
-        final int rideId;
-        final ActorRef<FulfillRide.Command> replyTo;
+        int rideId;
+        ActorRef<FulfillRide.Command> replyTo;
+
+        public RideStarted() {
+            super();
+        }
 
         public RideStarted(int rideId, ActorRef<FulfillRide.Command> replyTo) {
             this.rideId = rideId;
@@ -46,8 +54,12 @@ public class Cab extends EventSourcedBehavior<Cab.Command, Cab.CabEvent, Cab.Per
     }
 
     public static final class RideCancelled implements Command {
-        final int rideId;
-        final ActorRef<FulfillRide.Command> replyTo;
+        int rideId;
+        ActorRef<FulfillRide.Command> replyTo;
+
+        public RideCancelled() {
+            super();
+        }
 
         public RideCancelled(int rideId, ActorRef<FulfillRide.Command> replyTo) {
             this.rideId = rideId;
@@ -56,7 +68,11 @@ public class Cab extends EventSourcedBehavior<Cab.Command, Cab.CabEvent, Cab.Per
     }
 
     public static final class RideEnded implements Command {
-        final int rideId;
+        int rideId;
+
+        public RideEnded() {
+            super();
+        }
 
         public RideEnded(int rideId) {
             this.rideId = rideId;
@@ -64,7 +80,11 @@ public class Cab extends EventSourcedBehavior<Cab.Command, Cab.CabEvent, Cab.Per
     }
 
     public static final class SignIn implements Command {
-        final int initialPos;
+        int initialPos;
+
+        public SignIn() {
+            super();
+        }
 
         public SignIn(int initialPos) {
             this.initialPos = initialPos;
@@ -76,7 +96,11 @@ public class Cab extends EventSourcedBehavior<Cab.Command, Cab.CabEvent, Cab.Per
     }
 
     public static final class NumRides implements Command {
-        final ActorRef<Cab.NumRidesResponse> replyTo;
+        ActorRef<Cab.NumRidesResponse> replyTo;
+        
+        public NumRides() {
+            super();
+        }
 
         public NumRides(ActorRef<Cab.NumRidesResponse> replyTo) {
             this.replyTo = replyTo;
@@ -84,7 +108,11 @@ public class Cab extends EventSourcedBehavior<Cab.Command, Cab.CabEvent, Cab.Per
     }
 
     public static final class Reset implements Command {
-        final ActorRef<Cab.NumRidesResponse> replyTo;
+        ActorRef<Cab.NumRidesResponse> replyTo;
+
+        public Reset() {
+            super();
+        }
 
         public Reset(ActorRef<Cab.NumRidesResponse> replyTo) {
             this.replyTo = replyTo;
@@ -94,8 +122,12 @@ public class Cab extends EventSourcedBehavior<Cab.Command, Cab.CabEvent, Cab.Per
     /*
      * RESPONSE
      */
-    public static final class NumRidesResponse {
-        final int numRides;
+    public static final class NumRidesResponse implements CborSerializable {
+        int numRides;
+
+        public NumRidesResponse() {
+            super();
+        }
 
         public NumRidesResponse(int numRides) {
             this.numRides = numRides;
@@ -114,6 +146,10 @@ public class Cab extends EventSourcedBehavior<Cab.Command, Cab.CabEvent, Cab.Per
         int destinationLoc;
         ActorRef<FulfillRide.Command> replyTo;
 
+        public RequestRideEvent() {
+            super();
+        }
+
         public RequestRideEvent(int sourceLoc, int destinationLoc, ActorRef<FulfillRide.Command> replyTo) {
             this.sourceLoc = sourceLoc;
             this.destinationLoc = destinationLoc;
@@ -125,6 +161,10 @@ public class Cab extends EventSourcedBehavior<Cab.Command, Cab.CabEvent, Cab.Per
     public static final class SignInEvent implements CabEvent {
         int dummy = 0;
         int initialPos;
+
+        public SignInEvent() {
+            super();
+        }
 
         public SignInEvent(int initialPos) {
             this.initialPos = initialPos;
@@ -143,6 +183,10 @@ public class Cab extends EventSourcedBehavior<Cab.Command, Cab.CabEvent, Cab.Per
         int dummy = 0;
         int rideId;
 
+        public RideCancelledEvent() {
+            super();
+        }
+
         public RideCancelledEvent(int rideId) {
             this.rideId = rideId;
         }
@@ -151,6 +195,10 @@ public class Cab extends EventSourcedBehavior<Cab.Command, Cab.CabEvent, Cab.Per
     public static final class RideEndedEvent implements CabEvent {
         int dummy = 0;
         int rideId;
+        
+        public RideEndedEvent() {
+            super();
+        }
 
         public RideEndedEvent(int rideId) {
             this.rideId = rideId;
@@ -293,6 +341,7 @@ public class Cab extends EventSourcedBehavior<Cab.Command, Cab.CabEvent, Cab.Per
     }
 
     private Effect<CabEvent, PersistState> onReset(Reset message) {
+        System.out.println("\n=== RESET EVENT RECEIVED ===\n");
         return Effect().persist(new ResetEvent()).thenRun(
             newState -> {
                 if(newState.rideWasEndedOnReset)
@@ -302,7 +351,8 @@ public class Cab extends EventSourcedBehavior<Cab.Command, Cab.CabEvent, Cab.Per
                         newState.location
                     ));
                 message.replyTo.tell(new NumRidesResponse(newState.numRides));
-                System.out.println("Resetting cab " + this.entityId);
+                System.out.println("\n=== replyTo is "+message.replyTo + " ===\n");
+                System.out.println("\n=== Resetting cab " + this.entityId + " ===\n");
             }
         );
     }

@@ -9,7 +9,7 @@ public class RideService extends AbstractBehavior<RideService.Command> {
     int fulfillSpawnCount;
     private final String rsid;
 
-    public interface Command {}
+    public interface Command extends CborSerializable {}
 
     // Declare typekey for cluster sharding
     public static final EntityTypeKey<Command> TypeKey =
@@ -20,18 +20,25 @@ public class RideService extends AbstractBehavior<RideService.Command> {
      */
 
     public static final class CabSignsIn implements Command {
-        final String cabId;
-        final int initialPos;
+        String cabId;
+        int initialPos;
+
+        public CabSignsIn() {
+            super();
+        }
 
         public CabSignsIn(String cabId, int initialPos) {
-
             this.cabId = cabId;
             this.initialPos = initialPos;
         }
     }
 
     public static final class CabSignsOut implements Command {
-        final String cabId;
+        String cabId;
+
+        public CabSignsOut() {
+            super();
+        }
 
         public CabSignsOut(String cabId) {
             this.cabId = cabId;
@@ -39,10 +46,14 @@ public class RideService extends AbstractBehavior<RideService.Command> {
     }
 
     public static final class RequestRide implements Command {
-        final String custId;
-        final int sourceLoc;
-        final int destinationLoc;
-        final ActorRef<RideService.RideResponse> replyTo;
+        String custId;
+        int sourceLoc;
+        int destinationLoc;
+        ActorRef<RideService.RideResponse> replyTo;
+
+        public RequestRide() {
+            super();
+        }
 
         public RequestRide(String custId, int sourceLoc, int destinationLoc, ActorRef<RideService.RideResponse> replyTo) {
             this.custId = custId;
@@ -53,8 +64,12 @@ public class RideService extends AbstractBehavior<RideService.Command> {
     }
 
     public static final class RideEnded implements Command {
-        final String cabId;
-        final int newCabLocation;
+        String cabId;
+        int newCabLocation;
+
+        public RideEnded() {
+            super();
+        }
 
         public RideEnded(String cabId, int newCabLocation) {
             this.cabId = cabId;
@@ -71,11 +86,15 @@ public class RideService extends AbstractBehavior<RideService.Command> {
      */
 
     public static final class RideResponse implements Command {
-        final int rideId;
-        final String cabId;
-        final int fare;
-        final ActorRef<FulfillRide.Command> fRide;
-        final ActorRef<RideService.RideResponse> probe;
+        int rideId;
+        String cabId;
+        int fare;
+        ActorRef<FulfillRide.Command> fRide;
+        ActorRef<RideService.RideResponse> probe;
+
+        public RideResponse() {
+            super();
+        }
 
         public RideResponse(
             int rideId, 

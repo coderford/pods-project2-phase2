@@ -7,6 +7,7 @@ import java.util.Scanner;
 import akka.actor.typed.Behavior;
 import akka.actor.typed.javadsl.*;
 import akka.cluster.sharding.typed.javadsl.ClusterSharding;
+import akka.cluster.sharding.typed.javadsl.Entity;
 
 public class Main {
 
@@ -40,6 +41,12 @@ public class Main {
             // If nextRideService is positive, create 3 more RideService entities
             if(nextRideService > 0) {
                 final ClusterSharding sharding = ClusterSharding.get(context.getSystem());
+                sharding.init(
+                    Entity.of(
+                        RideService.TypeKey, 
+                        entityContext -> RideService.create(entityContext.getEntityId())
+                    )
+                );
 
                 for (int i = nextRideService; i < nextRideService + 3; i++) {
                     String name = "ride-actor-" + Integer.toString(i);

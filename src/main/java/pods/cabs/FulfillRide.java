@@ -1,6 +1,7 @@
 package pods.cabs;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
 
@@ -28,18 +29,22 @@ public class FulfillRide extends AbstractBehavior<FulfillRide.Command> {
     }
     private FFState curState;
 
-    public interface Command {}
+    public interface Command extends CborSerializable {}
     public interface Response {}
 
     /*
      * COMMAND DEFINITIONS
      */
     public static final class FulfillRideRequest implements Command {
-        final String custId;
-        final int sourceLoc;
-        final int destinationLoc;
-        final ActorRef<RideService.Command> replyTo;
-        final ActorRef<RideService.RideResponse> probe;
+        String custId;
+        int sourceLoc;
+        int destinationLoc;
+        ActorRef<RideService.Command> replyTo;
+        ActorRef<RideService.RideResponse> probe;
+
+        public FulfillRideRequest() {
+            super();
+        }
 
         public FulfillRideRequest(
             String custId, 
@@ -58,9 +63,13 @@ public class FulfillRide extends AbstractBehavior<FulfillRide.Command> {
     }
 
     public static final class RideEndedByCab implements Command {
-        final String cabId;
-        final int rideId;
-        final int newCabLocation;
+        String cabId;
+        int rideId;
+        int newCabLocation;
+
+        public RideEndedByCab() {
+            super();
+        }
 
         public RideEndedByCab(String cabId, int rideId, int newCabLocation) {
             this.cabId = cabId;
@@ -70,8 +79,12 @@ public class FulfillRide extends AbstractBehavior<FulfillRide.Command> {
     }
 
     public static final class RequestRideResponse implements Command {
-        final boolean accepted;
-        final int rideId;
+        boolean accepted;
+        int rideId;
+
+        public RequestRideResponse() {
+            super();
+        }
 
         public RequestRideResponse(boolean accepted, int rideId) {
             this.accepted = accepted;
@@ -80,7 +93,11 @@ public class FulfillRide extends AbstractBehavior<FulfillRide.Command> {
     }
 
     public static final class RideStartedResponse implements Command {
-        final boolean accepted;
+        boolean accepted;
+
+        public RideStartedResponse() {
+            super();
+        }
 
         public RideStartedResponse(boolean accepted) {
             this.accepted = accepted;
@@ -88,7 +105,11 @@ public class FulfillRide extends AbstractBehavior<FulfillRide.Command> {
     }
 
     public static final class RideCancelledResponse implements Command {
-        final boolean accepted;
+        boolean accepted;
+
+        public RideCancelledResponse() {
+            super();
+        }
 
         public RideCancelledResponse(boolean accepted) {
             this.accepted = accepted;
@@ -114,6 +135,7 @@ public class FulfillRide extends AbstractBehavior<FulfillRide.Command> {
 
         this.sharding = ClusterSharding.get(this.getContext().getSystem());
 
+        this.cabList = new ArrayList<>();
         populateCabList();
     }
 
@@ -235,6 +257,11 @@ public class FulfillRide extends AbstractBehavior<FulfillRide.Command> {
     }
 
     private void populateCabList() {
+        cabList.add("101");
+        cabList.add("102");
+        cabList.add("103");
+        cabList.add("104");
+        /*
         try {
             File inputFile = new File("IDs.txt");
             Scanner in = new Scanner(inputFile);
@@ -251,8 +278,10 @@ public class FulfillRide extends AbstractBehavior<FulfillRide.Command> {
 
             in.close();
         } catch (Exception e) {
-            System.out.println("ERROR: Could not read input file!");
+            System.out.println("[FulfillRide] ERROR: Could not read input file!");
+            System.out.println(e);
         }
+        */
     }
 }
 
